@@ -1,8 +1,25 @@
 import streamlit as st
 
-st.set_page_config(page_title="💼 KPI и Оклад Калькулятор", layout="centered")
+# --- Настройки страницы ---
+st.set_page_config(page_title="KPI и Оклад Калькулятор", layout="centered", initial_sidebar_state="collapsed")
 
-# 💰 Графики смен
+# --- Тёмная тема через кастомный CSS ---
+st.markdown("""
+    <style>
+        .stApp { background-color: #111111; color: white; }
+        h1, h2, h3, h4, h5, h6 { color: #ffffff; }
+        .css-10trblm, .css-1v0mbdj, .css-1cpxqw2 { color: #ffffff !important; }
+        .stNumberInput input, .stSlider { background-color: #222222 !important; color: white !important; }
+        .stSlider > div[data-baseweb="slider"] { background-color: #444444; }
+        .stTabs [role="tablist"] { border-bottom: 1px solid #444; }
+        .stTabs [role="tab"] { color: #ccc; }
+        .stTabs [aria-selected="true"] { color: white; background-color: #222; border-bottom: 2px solid #0f9d58; }
+        table { color: white; }
+        .stAlert-success { background-color: #1e4620; border-color: #145a32; color: #d4edda; }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- Графики смен ---
 shifts = {
     "07:00-16:00": (7, 16),
     "08:00-17:00": (8, 17),
@@ -19,9 +36,11 @@ shifts = {
     "21:00-09:00": (21, 33)
 }
 
+# --- Форматирование денег ---
 def format_money(val):
     return f"{int(val):,}".replace(",", " ")
 
+# --- Расчёт KPI по порогам ---
 def calculate_kpi(value, thresholds, reverse=False):
     sorted_thresholds = sorted(thresholds, reverse=not reverse)
     for threshold, percent in sorted_thresholds:
@@ -29,24 +48,22 @@ def calculate_kpi(value, thresholds, reverse=False):
             return percent
     return thresholds[-1][1] if reverse else 0
 
-# 💻 Заголовок
-st.markdown("<h1 style='text-align: center;'>💼 Расчет KPI и оклада</h1>", unsafe_allow_html=True)
+# --- Заголовок ---
+st.title("💼 Расчёт KPI и оклада")
 
-# Общие значения по умолчанию
-total_bonus = st.number_input("Общая сумма KPI (в сумах)", value=2_126_000, step=100_000)
-hourly_rate = st.number_input("Часовая ставка (сум/час)", value=27560, step=1000)
+with st.spinner("🔄 Загружаем интерфейс..."):
+    st.markdown("---")
 
-tabs = st.tabs(["📊 KPI", "💰 Оклад", "🧾 Общая сумма"])
+    # --- KPI ---
+    st.header("📊 Расчёт KPI")
 
-# ===== KPI ТАБ =====
-with tabs[0]:
-    st.subheader("📊 Введите показатели KPI")
+    total_bonus = st.number_input("Общая сумма KPI (в сумах)", value=2_126_000, step=100_000)
     quality = st.slider("Качество (%)", 91, 100, 100)
     svd = st.slider("СВД (сек)", 100, 140, 120)
     svz = st.slider("СВЗ (сек)", 120, 150, 130)
     cs = st.slider("CS", 4.4, 5.0, 4.8, step=0.01)
 
-    # Пороговые значения
+    # --- Пороговые значения ---
     quality_tiers = [(100, 100), (99, 90), (98, 80), (97, 70), (96, 60), (95, 50), (94, 40), (93, 30), (92, 20), (91, 10)]
     svd_tiers = [(120, 100), (125, 80), (130, 60), (135, 30), (140, 0)]
     svz_tiers = [(130, 100), (135, 90), (140, 80), (145, 70), (150, 0)]
@@ -54,6 +71,7 @@ with tabs[0]:
 
     weights = {"quality": 0.4, "svd": 0.25, "svz": 0.25, "cs": 0.1}
 
+    # --- Расчёты KPI ---
     quality_percent = calculate_kpi(quality, quality_tiers)
     svd_percent = calculate_kpi(svd, svd_tiers, reverse=True)
     svz_percent = calculate_kpi(svz, svz_tiers, reverse=True)
@@ -65,67 +83,46 @@ with tabs[0]:
     cs_sum = total_bonus * weights["cs"] * cs_percent / 100
     total_kpi = quality_sum + svd_sum + svz_sum + cs_sum
 
-    st.success("✅ KPI Расчёт завершён:")
-    st.markdown(f"""
-    | Метрика | % | Сумма |
-    |--------|----|-------|
-    | Качество | {quality_percent}% | **{format_money(quality_sum)} сум** |
-    | СВД     | {svd_percent}% | **{format_money(svd_sum)} сум** |
-    | СВЗ     | {svz_percent}% | **{format_money(svz_sum)} сум** |
-    | CS      | {cs_percent}% | **{format_money(cs_sum)} сум** |
-    """, unsafe_allow_html=True)
-    st.markdown("---")
-    st.success(f"💸 Общий KPI: **{format_money(total_kpi)} сум**")
+    # --- Вывод KPI ---
+    st.subheader("🔹 Результаты KPI:")
+    st.write(f"KPI по качеству: **{format_money(quality_sum)} сум**")
+    st.write(f"KPI по СВД: **{format_money(svd_sum)} сум**")
+    st.write(f"KPI по СВЗ: **{format_money(svz_sum)} сум**")
+    st.write(f"KPI по CS: **{format_money(cs_sum)} сум**")
+    st.success(f"Итоговый KPI: **{format_money(total_kpi)} сум**")
 
-# ===== ОКЛАД ТАБ =====
-with tabs[1]:
-    st.subheader("💰 Укажите смены:")
+    # --- Оклад ---
+    st.header("💰 Расчёт оклада по часовой ставке")
+
+    hourly_rate = st.number_input("Часовая ставка (сум/час)", value=27_560, step=1000)
+
+    st.subheader("Выберите количество смен по графику:")
     total_salary = 0
     night_hours = 0
 
     for shift_name, (start, end) in shifts.items():
         count = st.number_input(f"{shift_name}", min_value=0, value=0, step=1)
+        total_hours = end - start - 1  # Вычитаем 1 час на обед и перерывы
         normal = 0
         night = 0
-        shift_duration = end - start
-        effective_duration = shift_duration - 1 if shift_duration > 5 else shift_duration
-
-        for h in range(int(start), int(start + effective_duration)):
+        for h in range(int(start), int(end)):
             hour_mod = h % 24
             if 22 <= hour_mod or hour_mod < 6:
                 night += 1
             else:
                 normal += 1
-
-        total_salary += count * (normal * hourly_rate + night * hourly_rate * 1.5)
+        effective_normal = max(normal - 1, 0)  # учёт 1 часа вычета
+        total_salary += count * (effective_normal * hourly_rate + night * hourly_rate * 1.5)
         night_hours += count * night
 
     taxed_salary = total_salary * 0.88
 
-    st.success("✅ Расчёт завершён:")
-    st.markdown(f"""
-    - 🕒 Ночных часов: **{int(night_hours)}** ×1.5  
-    - 💼 Оклад (до налогов): **{format_money(total_salary)} сум**  
-    - 🧾 После 12% налога: **{format_money(taxed_salary)} сум**
-    """)
+    st.subheader("📄 Оклад:")
+    st.write(f"Общий оклад (до налогов): **{format_money(total_salary)} сум**")
+    st.write(f"В том числе {int(night_hours)} ночных часов ×1.5")
+    st.success(f"💸 Чистыми на руки (после 12% налога): **{format_money(taxed_salary)} сум**")
 
-# ===== ИТОГ =====
-with tabs[2]:
+    # --- Итоговая сумма ---
     final_total = total_kpi + taxed_salary
-
-    st.markdown("<h2 style='text-align: center;'>🧾 Общая сумма к получению</h2>", unsafe_allow_html=True)
+    st.header("🧾 Общая сумма к получению")
     st.success(f"💵 Всего: **{format_money(final_total)} сум** (KPI + Оклад после налога)")
-
-    st.markdown("""
-        <style>
-        .stApp {
-            background-color: #f9f9f9;
-        }
-        .stNumberInput > div {
-            transition: all 0.3s ease;
-        }
-        .stNumberInput > div:hover {
-            background-color: #e0f7fa;
-        }
-        </style>
-    """, unsafe_allow_html=True)
